@@ -53,6 +53,37 @@ export function anonymous<T>(fn: (db: Db) => Promise<T>): Promise<T> {
   return withUser(null, fn);
 }
 
+// ---------------------------------------------------------------------------
+// Owner connection, for ONE purpose only: the admin "DML demo" page that runs
+// db/07_dml.sql. That file writes tables the application role is forbidden to
+// write (sos_alert, alert_recipient, alert_audit are trigger/procedure-only)
+// and inserts data on behalf of several users, which RLS correctly refuses.
+// So it runs as the schema owner, inside a transaction that is ALWAYS rolled
+// back: nothing it does persists. Every other query in the app uses withUser().
+// ---------------------------------------------------------------------------
+const gOwner = globalThis as unknown as { _bykrOwnerPool?: Pool };
+
+function ownerPool(): Pool {
+  if (!gOwner._bykrOwnerPool) {
+    const url = process.env.DATABASE_ADMIN_URL;
+    if (!url) throw new Error("DATABASE_ADMIN_URL is not set; the DML demo needs the owner connection");
+    gOwner._bykrOwnerPool = new Pool({ connectionString: url, max: 2 });
+  }
+  return gOwner._bykrOwnerPool;
+}
+
+/** Run fn as the schema owner in a transaction that always rolls back. */
+export async function withOwnerRolledBack<T>(fn: (db: Db) => Promise<T>): Promise<T> {
+  const client = await ownerPool().connect();
+  try {
+    await client.query("BEGIN");
+    return await fn(client);
+  } finally {
+    await client.query("ROLLBACK").catch(() => {});
+    client.release();
+  }
+}
+
 /** Convert a JS number[] to pgvector's text input format: '[1,2,3]'. */
 export function toVectorLiteral(v: number[]): string {
   return `[${v.map((x) => (Number.isFinite(x) ? Number(x.toFixed(6)) : 0)).join(",")}]`;
