@@ -18,7 +18,7 @@ All SQL is hand-written and run through `pg`, with no ORM. Access control is enf
 
 ## Setup
 
-Prerequisites: Docker and Node.js 20+.
+Prerequisites: Docker and Node.js 20+. Four commands from a fresh clone to a running, seeded app:
 
 ```bash
 docker compose up -d --wait
@@ -29,12 +29,6 @@ npm install
 ```
 
 ```bash
-cp .env.example .env.local
-```
-
-Open `.env.local` and set `AUTH_SECRET` to a long random string (`openssl rand -base64 32`).
-
-```bash
 npm run seed
 ```
 
@@ -43,6 +37,8 @@ npm run dev
 ```
 
 Open <http://localhost:3000>.
+
+On a fresh clone, `npm run seed` first creates `.env.local` from `.env.example` with a newly generated random `AUTH_SECRET` (`scripts/ensure-env.ts`). It never overwrites an existing `.env.local`.
 
 `npm run seed` resets both databases. It applies `db/01_schema.sql` → `05_triggers.sql` and `db/08_seed.sql` as the Postgres superuser, then generates route telemetry in MongoDB and ends each historical ride, which produces its summary and embedding.
 

@@ -16,9 +16,8 @@
  *      waypoints -> sp_end_ride -> embedding path as the "End ride" button,
  *      then tags segments in MongoDB (updateMany).
  */
-import { config } from "dotenv";
-config({ path: ".env.local" });
-config();
+// Must stay the first import: creates .env.local on a fresh clone and loads it.
+import "./ensure-env";
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
