@@ -145,8 +145,12 @@ ALTER TABLE alert_audit       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE emergency_contact ENABLE ROW LEVEL SECURITY;
 
 -- ride ------------------------------------------------------------------------
+-- created_by is checked on the row itself as well as through the function:
+-- INSERT ... RETURNING re-checks this policy against the new row, and the
+-- STABLE function's snapshot cannot see a row inserted by the same statement.
 CREATE POLICY pol_ride_select ON ride FOR SELECT
-    USING (fn_user_can_view_ride(fn_current_user_id(), ride_id));
+    USING (created_by = fn_current_user_id()
+           OR fn_user_can_view_ride(fn_current_user_id(), ride_id));
 CREATE POLICY pol_ride_insert ON ride FOR INSERT
     WITH CHECK (created_by = fn_current_user_id());
 CREATE POLICY pol_ride_update ON ride FOR UPDATE
