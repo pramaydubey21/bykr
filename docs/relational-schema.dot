@@ -1,0 +1,224 @@
+// bykr — relational schema, transcribed from db/01_schema.sql.
+// Source for docs/relational-schema.png. Render with:
+//   dot -Tpng -Gdpi=150 docs/relational-schema.dot -o docs/relational-schema.png
+//
+// Every table, every column, its type, PK / FK / UQ markers, and every foreign
+// key drawn as an edge labelled with its constraint name and ON DELETE action.
+// Edge colour: red = CASCADE, blue = RESTRICT.
+
+digraph bykr_relational {
+    graph [rankdir=LR, splines=true, nodesep=0.4, ranksep=1.3, pad=0.4,
+           fontname="Helvetica", fontsize=20, labelloc=t,
+           label="bykr — relational schema (db/01_schema.sql)\nPK = primary key   FK = foreign key   UQ = unique   red edge = ON DELETE CASCADE   blue edge = ON DELETE RESTRICT\n "];
+    node  [shape=plaintext, fontname="Helvetica", fontsize=11];
+    edge  [fontname="Helvetica", fontsize=9, arrowhead=normal, arrowtail=crow, dir=both];
+
+    // ===================== identity and access =====================
+    app_user [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="4">
+      <tr><td bgcolor="#1a56db" colspan="2"><font color="white"><b>app_user</b></font></td></tr>
+      <tr><td port="user_id" align="left"><b>PK</b> user_id</td><td align="left">INT identity</td></tr>
+      <tr><td align="left">full_name</td><td align="left">TEXT NN</td></tr>
+      <tr><td align="left"><b>UQ</b> email</td><td align="left">TEXT NN</td></tr>
+      <tr><td align="left">phone_no</td><td align="left">TEXT</td></tr>
+      <tr><td align="left">password_hash</td><td align="left">TEXT NN ($argon2…)</td></tr>
+      <tr><td align="left">created_at</td><td align="left">TIMESTAMPTZ NN</td></tr>
+    </table>>];
+
+    app_role [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="4">
+      <tr><td bgcolor="#1a56db" colspan="2"><font color="white"><b>app_role</b></font></td></tr>
+      <tr><td port="role_id" align="left"><b>PK</b> role_id</td><td align="left">INT identity</td></tr>
+      <tr><td align="left"><b>UQ</b> role_name</td><td align="left">TEXT NN (RIDER|ADMIN)</td></tr>
+    </table>>];
+
+    user_role [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="4">
+      <tr><td bgcolor="#1a56db" colspan="2"><font color="white"><b>user_role</b></font></td></tr>
+      <tr><td port="user_id" align="left"><b>PK FK</b> user_id</td><td align="left">INT NN</td></tr>
+      <tr><td port="role_id" align="left"><b>PK FK</b> role_id</td><td align="left">INT NN</td></tr>
+    </table>>];
+
+    permission [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="4">
+      <tr><td bgcolor="#1a56db" colspan="2"><font color="white"><b>permission</b></font></td></tr>
+      <tr><td port="permission_id" align="left"><b>PK</b> permission_id</td><td align="left">INT identity</td></tr>
+      <tr><td align="left"><b>UQ</b> permission_key</td><td align="left">TEXT NN</td></tr>
+    </table>>];
+
+    role_permission [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="4">
+      <tr><td bgcolor="#1a56db" colspan="2"><font color="white"><b>role_permission</b></font></td></tr>
+      <tr><td port="role_id" align="left"><b>PK FK</b> role_id</td><td align="left">INT NN</td></tr>
+      <tr><td port="permission_id" align="left"><b>PK FK</b> permission_id</td><td align="left">INT NN</td></tr>
+    </table>>];
+
+    friendship [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="4">
+      <tr><td bgcolor="#9d174d" colspan="2"><font color="white"><b>friendship</b></font></td></tr>
+      <tr><td align="left"><b>PK</b> friendship_id</td><td align="left">INT identity</td></tr>
+      <tr><td port="requester_id" align="left"><b>FK UQ¹</b> requester_id</td><td align="left">INT NN</td></tr>
+      <tr><td port="addressee_id" align="left"><b>FK UQ¹</b> addressee_id</td><td align="left">INT NN</td></tr>
+      <tr><td align="left">link_state</td><td align="left">TEXT NN (PENDING|ACCEPTED|BLOCKED)</td></tr>
+      <tr><td align="left">requested_at</td><td align="left">TIMESTAMPTZ NN</td></tr>
+      <tr><td align="left">linked_at</td><td align="left">TIMESTAMPTZ</td></tr>
+      <tr><td colspan="2" align="left"><font point-size="9">CHECK requester ≠ addressee; ¹ UQ ordered pair + unordered-pair index</font></td></tr>
+    </table>>];
+
+    // ===================== rides =====================
+    ride [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="4">
+      <tr><td bgcolor="#047857" colspan="2"><font color="white"><b>ride</b></font></td></tr>
+      <tr><td port="ride_id" align="left"><b>PK</b> ride_id</td><td align="left">INT identity</td></tr>
+      <tr><td port="created_by" align="left"><b>FK</b> created_by</td><td align="left">INT NN</td></tr>
+      <tr><td align="left">ride_title</td><td align="left">TEXT NN</td></tr>
+      <tr><td align="left">created_at</td><td align="left">TIMESTAMPTZ NN</td></tr>
+      <tr><td align="left">started_at</td><td align="left">TIMESTAMPTZ</td></tr>
+      <tr><td align="left">ended_at</td><td align="left">TIMESTAMPTZ</td></tr>
+      <tr><td align="left">ride_state</td><td align="left">TEXT NN (CREATED|ACTIVE|COMPLETED)</td></tr>
+    </table>>];
+
+    ride_participant [label=<<table border="2" cellborder="1" cellspacing="0" cellpadding="4" color="#b45309">
+      <tr><td bgcolor="#b45309" colspan="2"><font color="white"><b>ride_participant  (HUB)</b></font></td></tr>
+      <tr><td port="participant_id" align="left"><b>PK</b> participant_id</td><td align="left">INT identity</td></tr>
+      <tr><td port="ride_id" align="left"><b>FK UQ²</b> ride_id</td><td align="left">INT NN</td></tr>
+      <tr><td port="user_id" align="left"><b>FK UQ²</b> user_id</td><td align="left">INT NN</td></tr>
+      <tr><td align="left">invited_at</td><td align="left">TIMESTAMPTZ NN</td></tr>
+      <tr><td align="left">joined_at</td><td align="left">TIMESTAMPTZ</td></tr>
+      <tr><td align="left">left_at</td><td align="left">TIMESTAMPTZ</td></tr>
+      <tr><td align="left">is_leader</td><td align="left">BOOLEAN NN</td></tr>
+      <tr><td colspan="2" align="left"><font point-size="9">² UQ (ride_id, user_id); one leader per ride (partial unique index)</font></td></tr>
+    </table>>];
+
+    ride_waypoint [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="4">
+      <tr><td bgcolor="#047857" colspan="2"><font color="white"><b>ride_waypoint</b></font></td></tr>
+      <tr><td port="ride_id" align="left"><b>PK FK</b> ride_id</td><td align="left">INT NN</td></tr>
+      <tr><td align="left"><b>PK</b> seq</td><td align="left">INT NN</td></tr>
+      <tr><td align="left">latitude</td><td align="left">NUMERIC(9,6) NN</td></tr>
+      <tr><td align="left">longitude</td><td align="left">NUMERIC(9,6) NN</td></tr>
+      <tr><td align="left">speed_kmph</td><td align="left">NUMERIC(6,2)</td></tr>
+      <tr><td align="left">recorded_at</td><td align="left">TIMESTAMPTZ NN</td></tr>
+    </table>>];
+
+    ride_summary [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="4">
+      <tr><td bgcolor="#047857" colspan="2"><font color="white"><b>ride_summary</b></font></td></tr>
+      <tr><td port="ride_id" align="left"><b>PK FK</b> ride_id</td><td align="left">INT NN</td></tr>
+      <tr><td align="left">distance_km</td><td align="left">NUMERIC(8,2) NN</td></tr>
+      <tr><td align="left">duration_min</td><td align="left">NUMERIC(8,2) NN</td></tr>
+      <tr><td align="left">avg_speed_kmph</td><td align="left">NUMERIC(6,2) NN</td></tr>
+      <tr><td align="left">max_speed_kmph</td><td align="left">NUMERIC(6,2) NN</td></tr>
+      <tr><td align="left">stop_count</td><td align="left">INT NN</td></tr>
+      <tr><td align="left">start_lat, start_lon</td><td align="left">NUMERIC(9,6) NN</td></tr>
+      <tr><td align="left">end_lat, end_lon</td><td align="left">NUMERIC(9,6) NN</td></tr>
+      <tr><td align="left">bbox_diagonal_km</td><td align="left">NUMERIC(8,2) NN</td></tr>
+      <tr><td align="left">straightness_ratio</td><td align="left">NUMERIC(5,4) NN</td></tr>
+      <tr><td align="left">route_embedding</td><td align="left">vector(96)  [HNSW cosine]</td></tr>
+      <tr><td align="left">computed_at</td><td align="left">TIMESTAMPTZ NN</td></tr>
+    </table>>];
+
+    // ===================== status =====================
+    status_type [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="4">
+      <tr><td bgcolor="#6d28d9" colspan="2"><font color="white"><b>status_type</b></font></td></tr>
+      <tr><td port="type_id" align="left"><b>PK</b> type_id</td><td align="left">INT identity</td></tr>
+      <tr><td align="left"><b>UQ</b> status_label</td><td align="left">TEXT NN</td></tr>
+      <tr><td align="left">icon_name</td><td align="left">TEXT NN</td></tr>
+    </table>>];
+
+    rider_status [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="4">
+      <tr><td bgcolor="#6d28d9" colspan="2"><font color="white"><b>rider_status</b></font></td></tr>
+      <tr><td align="left"><b>PK</b> status_id</td><td align="left">INT identity</td></tr>
+      <tr><td port="participant_id" align="left"><b>FK</b> participant_id</td><td align="left">INT NN</td></tr>
+      <tr><td port="type_id" align="left"><b>FK</b> type_id</td><td align="left">INT NN</td></tr>
+      <tr><td align="left">set_at</td><td align="left">TIMESTAMPTZ NN</td></tr>
+      <tr><td align="left">cleared_at</td><td align="left">TIMESTAMPTZ</td></tr>
+    </table>>];
+
+    // ===================== contacts and authorities =====================
+    emergency_contact [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="4">
+      <tr><td bgcolor="#0e7490" colspan="2"><font color="white"><b>emergency_contact</b></font></td></tr>
+      <tr><td port="contact_id" align="left"><b>PK</b> contact_id</td><td align="left">INT identity</td></tr>
+      <tr><td port="user_id" align="left"><b>FK UQ³</b> user_id</td><td align="left">INT NN</td></tr>
+      <tr><td align="left">contact_name</td><td align="left">TEXT NN</td></tr>
+      <tr><td align="left"><b>UQ³</b> contact_phone</td><td align="left">TEXT NN</td></tr>
+      <tr><td align="left">relation</td><td align="left">TEXT NN</td></tr>
+    </table>>];
+
+    authority [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="4">
+      <tr><td bgcolor="#0e7490" colspan="2"><font color="white"><b>authority</b></font></td></tr>
+      <tr><td port="authority_id" align="left"><b>PK</b> authority_id</td><td align="left">INT identity</td></tr>
+      <tr><td align="left"><b>UQ⁴</b> authority_name</td><td align="left">TEXT NN</td></tr>
+      <tr><td align="left">authority_type</td><td align="left">TEXT NN</td></tr>
+      <tr><td align="left">contact_no</td><td align="left">TEXT NN</td></tr>
+      <tr><td align="left"><b>UQ⁴</b> jurisdiction</td><td align="left">TEXT NN</td></tr>
+      <tr><td align="left">base_latitude</td><td align="left">NUMERIC(9,6) NN</td></tr>
+      <tr><td align="left">base_longitude</td><td align="left">NUMERIC(9,6) NN</td></tr>
+      <tr><td align="left">radius_km</td><td align="left">NUMERIC(7,2) NN</td></tr>
+    </table>>];
+
+    // ===================== accidents and alerting =====================
+    accident_event [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="4">
+      <tr><td bgcolor="#b91c1c" colspan="2"><font color="white"><b>accident_event</b></font></td></tr>
+      <tr><td port="event_id" align="left"><b>PK</b> event_id</td><td align="left">INT identity</td></tr>
+      <tr><td port="participant_id" align="left"><b>FK</b> participant_id</td><td align="left">INT NN</td></tr>
+      <tr><td align="left">impact_force</td><td align="left">NUMERIC(6,2) NN</td></tr>
+      <tr><td align="left">latitude</td><td align="left">NUMERIC(9,6) NN</td></tr>
+      <tr><td align="left">longitude</td><td align="left">NUMERIC(9,6) NN</td></tr>
+      <tr><td align="left">detected_at</td><td align="left">TIMESTAMPTZ NN</td></tr>
+      <tr><td align="left">is_confirmed</td><td align="left">BOOLEAN NN</td></tr>
+      <tr><td align="left">motion_sample_id</td><td align="left">TEXT (Mongo ObjectId)</td></tr>
+    </table>>];
+
+    sos_alert [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="4">
+      <tr><td bgcolor="#b91c1c" colspan="2"><font color="white"><b>sos_alert</b></font></td></tr>
+      <tr><td port="alert_id" align="left"><b>PK</b> alert_id</td><td align="left">INT identity</td></tr>
+      <tr><td port="event_id" align="left"><b>FK UQ</b> event_id</td><td align="left">INT NN</td></tr>
+      <tr><td align="left">channel</td><td align="left">TEXT NN</td></tr>
+      <tr><td align="left">sent_at</td><td align="left">TIMESTAMPTZ NN</td></tr>
+      <tr><td align="left">delivery_state</td><td align="left">TEXT NN</td></tr>
+    </table>>];
+
+    alert_recipient [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="4">
+      <tr><td bgcolor="#b91c1c" colspan="2"><font color="white"><b>alert_recipient</b></font></td></tr>
+      <tr><td port="recipient_id" align="left"><b>PK</b> recipient_id</td><td align="left">INT identity</td></tr>
+      <tr><td port="alert_id" align="left"><b>FK</b> alert_id</td><td align="left">INT NN</td></tr>
+      <tr><td align="left">recipient_kind</td><td align="left">TEXT NN</td></tr>
+      <tr><td port="user_id" align="left"><b>FK</b> user_id</td><td align="left">INT NULL</td></tr>
+      <tr><td port="contact_id" align="left"><b>FK</b> contact_id</td><td align="left">INT NULL</td></tr>
+      <tr><td port="authority_id" align="left"><b>FK</b> authority_id</td><td align="left">INT NULL</td></tr>
+      <tr><td align="left">delivery_state</td><td align="left">TEXT NN</td></tr>
+      <tr><td align="left">attempted_at</td><td align="left">TIMESTAMPTZ</td></tr>
+      <tr><td colspan="2" align="left"><font point-size="9">chk_alert_recipient_exactly_one: one ref set, matching kind</font></td></tr>
+    </table>>];
+
+    alert_audit [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="4">
+      <tr><td bgcolor="#57534e" colspan="2"><font color="white"><b>alert_audit</b>  (append-only)</font></td></tr>
+      <tr><td align="left"><b>PK</b> audit_id</td><td align="left">BIGINT identity always</td></tr>
+      <tr><td port="alert_id" align="left">alert_id</td><td align="left">INT NN (no FK)</td></tr>
+      <tr><td port="recipient_id" align="left">recipient_id</td><td align="left">INT NN (no FK)</td></tr>
+      <tr><td align="left">attempted_at</td><td align="left">TIMESTAMPTZ NN</td></tr>
+      <tr><td align="left">outcome</td><td align="left">TEXT NN</td></tr>
+      <tr><td colspan="2" align="left"><font point-size="9">No FKs on purpose: survives deletion of what it describes</font></td></tr>
+    </table>>];
+
+    // ===================== foreign keys: child:col -> parent:pk =====================
+    edge [color="#b91c1c", fontcolor="#b91c1c"];   // CASCADE
+    user_role:user_id            -> app_user:user_id                 [label="fk_user_role_user\nCASCADE"];
+    role_permission:role_id      -> app_role:role_id                 [label="fk_role_permission_role\nCASCADE"];
+    role_permission:permission_id -> permission:permission_id        [label="fk_role_permission_permission\nCASCADE"];
+    friendship:requester_id      -> app_user:user_id                 [label="fk_friendship_requester\nCASCADE"];
+    friendship:addressee_id      -> app_user:user_id                 [label="fk_friendship_addressee\nCASCADE"];
+    ride_participant:ride_id     -> ride:ride_id                     [label="fk_ride_participant_ride\nCASCADE"];
+    ride_waypoint:ride_id        -> ride:ride_id                     [label="fk_ride_waypoint_ride\nCASCADE"];
+    ride_summary:ride_id         -> ride:ride_id                     [label="fk_ride_summary_ride\nCASCADE", arrowtail=teeodot];
+    rider_status:participant_id  -> ride_participant:participant_id  [label="fk_rider_status_participant\nCASCADE"];
+    emergency_contact:user_id    -> app_user:user_id                 [label="fk_emergency_contact_user\nCASCADE"];
+    accident_event:participant_id -> ride_participant:participant_id [label="fk_accident_event_participant\nCASCADE"];
+    sos_alert:event_id           -> accident_event:event_id          [label="fk_sos_alert_event\nCASCADE", arrowtail=teeodot];
+    alert_recipient:alert_id     -> sos_alert:alert_id               [label="fk_alert_recipient_alert\nCASCADE"];
+    alert_recipient:user_id      -> app_user:user_id                 [label="fk_alert_recipient_user\nCASCADE"];
+    alert_recipient:contact_id   -> emergency_contact:contact_id     [label="fk_alert_recipient_contact\nCASCADE"];
+
+    edge [color="#1a56db", fontcolor="#1a56db"];   // RESTRICT
+    user_role:role_id            -> app_role:role_id                 [label="fk_user_role_role\nRESTRICT"];
+    ride:created_by              -> app_user:user_id                 [label="fk_ride_created_by\nRESTRICT"];
+    ride_participant:user_id     -> app_user:user_id                 [label="fk_ride_participant_user\nRESTRICT"];
+    rider_status:type_id         -> status_type:type_id              [label="fk_rider_status_type\nRESTRICT"];
+    alert_recipient:authority_id -> authority:authority_id           [label="fk_alert_recipient_authority\nRESTRICT"];
+
+    edge [color="#a8a29e", fontcolor="#78716c", style=dashed, arrowtail=none];  // logical only
+    alert_audit:alert_id         -> sos_alert:alert_id               [label="logical ref, no FK"];
+    alert_audit:recipient_id     -> alert_recipient:recipient_id     [label="logical ref, no FK"];
+}

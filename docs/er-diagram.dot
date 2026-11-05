@@ -1,0 +1,133 @@
+// bykr — Entity-Relationship diagram (Chen notation).
+// Source for docs/ER-diagram.png. Render with:
+//   dot -Tpng -Gdpi=150 docs/er-diagram.dot -o docs/ER-diagram.png
+//
+// Notation
+//   rectangle            entity
+//   double rectangle     weak entity (identified through its owner)
+//   diamond              relationship;  double diamond = identifying relationship
+//   rectangle in diamond associative entity (ride_participant — the hub)
+//   edge label           cardinality of that side (1, N, M, 0..1)
+//   bold edge            total participation (every row must take part)
+//   dashed edge          logical link with NO foreign key (alert_audit)
+// Attributes are limited to keys and the columns that define each relationship;
+// docs/relational-schema.png lists every column.
+
+graph bykr_er {
+    graph [layout=dot, rankdir=TB, splines=true, nodesep=0.35, ranksep=0.7,
+           fontname="Helvetica", fontsize=20, labelloc=t, pad=0.4,
+           label="bykr — Entity-Relationship diagram (Chen notation)\nride_participant is the hub: statuses and accident events hang off a participation, never off (user, ride) separately\n "];
+    node  [fontname="Helvetica", fontsize=12];
+    edge  [fontname="Helvetica", fontsize=11, color="#444444"];
+
+    // ---------------- entities ----------------
+    node [shape=box, style="filled", fillcolor="#e8f0fe", color="#1a56db", penwidth=1.4];
+    app_user          [label=<<b>APP_USER</b><br/><u>user_id</u><br/><font point-size="10">full_name, email, phone_no</font>>];
+    app_role          [label=<<b>APP_ROLE</b><br/><u>role_id</u><br/><font point-size="10">role_name ∈ {RIDER, ADMIN}</font>>];
+    permission        [label=<<b>PERMISSION</b><br/><u>permission_id</u><br/><font point-size="10">permission_key</font>>];
+    ride              [label=<<b>RIDE</b><br/><u>ride_id</u><br/><font point-size="10">ride_title, ride_state</font>>];
+    status_type       [label=<<b>STATUS_TYPE</b><br/><u>type_id</u><br/><font point-size="10">status_label, icon_name</font>>];
+    rider_status      [label=<<b>RIDER_STATUS</b><br/><u>status_id</u><br/><font point-size="10">set_at, cleared_at</font>>];
+    accident_event    [label=<<b>ACCIDENT_EVENT</b><br/><u>event_id</u><br/><font point-size="10">impact_force, lat/lon, is_confirmed</font>>];
+    sos_alert         [label=<<b>SOS_ALERT</b><br/><u>alert_id</u><br/><font point-size="10">channel, delivery_state</font>>];
+    alert_recipient   [label=<<b>ALERT_RECIPIENT</b><br/><u>recipient_id</u><br/><font point-size="10">recipient_kind, delivery_state</font>>];
+    emergency_contact [label=<<b>EMERGENCY_CONTACT</b><br/><u>contact_id</u><br/><font point-size="10">contact_name, contact_phone, relation</font>>];
+    authority         [label=<<b>AUTHORITY</b><br/><u>authority_id</u><br/><font point-size="10">authority_type, jurisdiction, radius_km</font>>];
+    alert_audit       [label=<<b>ALERT_AUDIT</b><br/><u>audit_id</u><br/><font point-size="10">append-only, no FKs</font>>, style="filled,dashed"];
+
+    // weak entities
+    node [peripheries=2];
+    ride_waypoint     [label=<<b>RIDE_WAYPOINT</b><br/><u>ride_id, seq</u><br/><font point-size="10">lat, lon, speed_kmph</font>>];
+    ride_summary      [label=<<b>RIDE_SUMMARY</b><br/><u>ride_id</u><br/><font point-size="10">stats + route_embedding vector(96)</font>>];
+    node [peripheries=1];
+
+    // associative entity — the hub
+    ride_participant  [shape=box, peripheries=1, style="filled,bold", fillcolor="#fde68a", color="#b45309", penwidth=3,
+                       label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="6" color="#b45309">
+                              <tr><td bgcolor="#fbbf24"><b>◆ RIDE_PARTICIPANT ◆</b></td></tr>
+                              <tr><td>associative entity (HUB)<br/><u>participant_id</u><br/><font point-size="10">joined_at, left_at, is_leader<br/>UNIQUE (ride_id, user_id)</font></td></tr>
+                              </table>>];
+
+    // ---------------- relationships ----------------
+    node [shape=diamond, style=filled, fillcolor="#fef3c7", color="#92400e", penwidth=1.2, fontsize=11, peripheries=1];
+    r_has_role    [label="HAS_ROLE\n(user_role)"];
+    r_grants      [label="GRANTS\n(role_permission)"];
+    r_friend      [label="FRIENDSHIP\nlink_state,\nlinked_at", fillcolor="#fce7f3", color="#9d174d"];
+    r_creates     [label="CREATES"];
+    r_takes_part  [label="TAKES_PART"];
+    r_includes    [label="INCLUDES"];
+    r_sets        [label="SETS"];
+    r_classifies  [label="CLASSIFIES"];
+    r_suffers     [label="SUFFERS"];
+    r_raises      [label="RAISES\n(trg_generate_sos)"];
+    r_fans_out    [label="FANS_OUT"];
+    r_registers   [label="REGISTERS"];
+    r_notif_user  [label="NOTIFIES\n(CO_RIDER)"];
+    r_notif_cont  [label="NOTIFIES\n(EMERGENCY_\nCONTACT)"];
+    r_notif_auth  [label="NOTIFIES\n(AUTHORITY)"];
+    r_logs        [label="LOGS", style="filled,dashed"];
+    node [peripheries=2];
+    r_route       [label="ROUTE_OF"];
+    r_summarises  [label="SUMMARISES"];
+    node [peripheries=1];
+
+    // ---------------- edges (label = cardinality on that side) ----------------
+    // access control
+    app_user  -- r_has_role [label="M"];
+    r_has_role -- app_role  [label="N"];
+    app_role  -- r_grants   [label="M"];
+    r_grants  -- permission [label="N"];
+
+    // recursive relationship: friendship on app_user, two roles
+    app_user -- r_friend [label="requester  M", color="#9d174d", fontcolor="#9d174d"];
+    app_user -- r_friend [label="addressee  N", color="#9d174d", fontcolor="#9d174d"];
+
+    // rides
+    app_user  -- r_creates [label="1"];
+    r_creates -- ride      [label="N", style=bold];
+
+    // the hub: M:N between app_user and ride, resolved by ride_participant
+    app_user     -- r_takes_part     [label="1"];
+    r_takes_part -- ride_participant [label="N", style=bold, penwidth=2.5, color="#b45309"];
+    ride         -- r_includes       [label="1"];
+    r_includes   -- ride_participant [label="N", style=bold, penwidth=2.5, color="#b45309"];
+
+    ride -- r_route       [label="1"];
+    r_route -- ride_waypoint [label="N", style=bold];
+    ride -- r_summarises  [label="1"];
+    r_summarises -- ride_summary [label="0..1", style=bold];
+
+    // everything that happens on a ride hangs off the participant
+    ride_participant -- r_sets      [label="1", color="#b45309"];
+    r_sets -- rider_status          [label="N", style=bold];
+    status_type -- r_classifies     [label="1"];
+    r_classifies -- rider_status    [label="N", style=bold];
+
+    ride_participant -- r_suffers   [label="1", color="#b45309"];
+    r_suffers -- accident_event     [label="N", style=bold];
+
+    // alerting
+    accident_event -- r_raises      [label="1"];
+    r_raises -- sos_alert           [label="0..1\n(only if confirmed)", style=bold];
+    sos_alert -- r_fans_out         [label="1"];
+    r_fans_out -- alert_recipient   [label="N", style=bold];
+
+    app_user -- r_registers         [label="1"];
+    r_registers -- emergency_contact [label="N", style=bold];
+
+    // alert_recipient references exactly one of three targets (chk_alert_recipient_exactly_one)
+    alert_recipient -- r_notif_user [label="N"];
+    r_notif_user -- app_user        [label="0..1"];
+    alert_recipient -- r_notif_cont [label="N"];
+    r_notif_cont -- emergency_contact [label="0..1"];
+    alert_recipient -- r_notif_auth [label="N"];
+    r_notif_auth -- authority       [label="0..1"];
+
+    // audit: logical only
+    alert_audit -- r_logs  [label="N", style=dashed];
+    r_logs -- sos_alert    [label="1", style=dashed];
+
+    // ---------------- layout hints ----------------
+    { rank=same; app_role; permission; }
+    { rank=same; ride_participant; }
+}
